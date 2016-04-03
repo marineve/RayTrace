@@ -1,7 +1,3 @@
-CSC 305 Assignment 1 - Ray Tracer
-Marin Evergreen
-V00748829
-
 This ray tracer contains all of the desired functionality described in the assignment.
 	- It has the ability to render one or more spheres.
 	- There is a Floor class, which can be rendered beneath the spheres if desired.
