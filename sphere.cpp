@@ -1,0 +1,83 @@
+#include "Sphere.h"
+
+Sphere::Sphere(Vector3 centerIn, float radiusIn, Vector3 ambient, Vector3 diffuse, bool reflection) :
+    Object(ambient, diffuse, reflection),
+    center(centerIn),
+    radius(radiusIn)
+{}
+
+bool Sphere::Intersect(Vector3 origin, Vector3 direction,
+                  float *tOut, Vector3 *normalOut, Vector3* intPoint)
+{
+    Vector3 EO = math.Minus(center, origin);
+    float v = math.DotProduct(EO, direction);
+    float radiusSquared = radius * radius;
+    float EOSquared = math.DotProduct(EO, EO);
+    float discriminant = radiusSquared - (EOSquared - v * v);
+
+    float t = -1;
+    if(discriminant > 0)
+    {
+        float d = sqrt(discriminant);
+        t = v - d;
+    }
+
+    if(t > 0)
+    {
+        *tOut = t;
+        Vector3 intersectionPoint = math.MultiplyScalar(direction,t);
+        intersectionPoint = math.Add(intersectionPoint, origin);
+        *intPoint = intersectionPoint;
+        Vector3 surfaceNormal = math.Minus(intersectionPoint, center);
+        (*normalOut) = math.Normalize(surfaceNormal);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+void Sphere::Translate(Vector3 difference)
+{
+    v[0] = center.x;
+    v[1] = center.y;
+    v[2] = center.z;
+    v[3] = 1;
+
+    //Initialize the transformation matrix
+    for(int i = 0; i < 4; i++)
+    {
+        for(int j = 0; j < 4; j++)
+        {
+            if(i == j)
+            {
+                m[i][j] = 1;
+            }
+            else
+            {
+                m[i][j] = 0;
+            }
+        }
+    }
+
+    m[3][0] = difference.x;
+    m[3][1] = difference.y;
+    m[3][2] = difference.z;
+
+    //Apply the transformation
+    Vector3 result = Transform();
+    center = result;
+}
+
+Vector3 Sphere::Transform()
+{
+    Vector3 result;
+    //Calculate the result of the matrix
+    result.x = v[0] * m[0][0] + v[1] * m[1][0] + v[2] * m[2][0] + v[3] * m[3][0];
+    result.y = v[0] * m[0][1] + v[1] * m[1][1] + v[2] * m[2][1] + v[3] * m[3][1];
+    result.z = v[0] * m[0][2] + v[1] * m[1][2] + v[2] * m[2][2] + v[3] * m[3][2];
+    int w = v[0] * m[0][3] + v[1] * m[1][3] + v[2] * m[2][3] + v[3] * m[3][3];
+
+    return result;
+}
