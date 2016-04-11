@@ -34,7 +34,7 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     virtual bool Intersect(Vector3 origin, Vector3 direction,
-                           float* tOut, Vector3* normalOut, Vector3* intPoint) = 0;
+                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false) = 0;
 
     Vector3 ambientColour;
     Vector3 diffuseColour;

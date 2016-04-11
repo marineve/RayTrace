@@ -7,7 +7,7 @@ Sphere::Sphere(Vector3 centerIn, float radiusIn, Vector3 ambient, Vector3 diffus
 {}
 
 bool Sphere::Intersect(Vector3 origin, Vector3 direction,
-                  float *tOut, Vector3 *normalOut, Vector3* intPoint)
+                  float *tOut, Vector3 *normalOut, Vector3* intPoint, bool backPoint)
 {
     Vector3 EO = math.Minus(center, origin);
     float v = math.DotProduct(EO, direction);
@@ -19,7 +19,7 @@ bool Sphere::Intersect(Vector3 origin, Vector3 direction,
     if(discriminant > 0)
     {
         float d = sqrt(discriminant);
-        t = v - d;
+        t = backPoint ? v + d : v - d;
     }
 
     if(t > 0)

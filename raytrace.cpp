@@ -1,12 +1,15 @@
 #include "raytrace.h"
-#include <stdio.h>      /* printf, scanf, puts, NULL */
-#include <stdlib.h>     /* srand, rand */
-#include <time.h>       /* time */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 RayTrace::RayTrace():
     camera(256, 256, -400),
     shadowColour(0, 0, 0),
-    areaLight(Vector3(300, -200, -50), Vector3(100, -200, -50), Vector3(300, -200, 50), 2) {}
+    areaLight(Vector3(300, -200, -50), Vector3(100, -200, -50), Vector3(300, -200, 50), 2),
+    numGridRows(5),
+    numGridColumns(5),
+    airIndex(1.0f) {}
 
 void RayTrace::SetColour(Pixel &px, Vector3 calcColour)
 {
@@ -166,17 +169,24 @@ bool RayTrace::Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint,
     }
 }
 
-bool RayTrace::Refraction(Vector3 dir, Vector3 norm, float rindex, Vector3* t)
-{
+bool RayTrace::Refraction(Vector3 direction, Vector3 *normal, Vector3 *intPoint,
+                          int *refractObjectIndex, Vector3 *refractAmbient, Vector3 *refractDiffuse, bool inside, float *c)
+{   
+    float rindex = inside ? 1.55f : 1/1.55f;
+    Vector3 initNormal;
+    initNormal.x = normal->x;
+    initNormal.y = normal->y;
+    initNormal.z = normal->z;
+
     //Find the direction of the ray in the refractive material
-    float d_dot_n = math.DotProduct(dir, norm);
-    Vector3 exp1 = math.MultiplyScalar(norm, d_dot_n);
-    exp1 = math.Minus(dir, exp1);
-    exp1 = math.MultiplyScalar(exp1, airIndex/rindex);
+    float d_dot_n = math.DotProduct(direction, *normal);
+    Vector3 exp1 = math.MultiplyScalar(*normal, d_dot_n);
+    exp1 = math.Minus(direction, exp1);
+    exp1 = math.MultiplyScalar(exp1, rindex);
 
     float temp = d_dot_n * d_dot_n;
     temp = 1 - temp;
-    temp = ((airIndex * airIndex)/(rindex * rindex)) * temp;
+    temp = (rindex * rindex) * temp;
     temp = 1 - temp;
 
     if(temp < 0) {
@@ -184,11 +194,78 @@ bool RayTrace::Refraction(Vector3 dir, Vector3 norm, float rindex, Vector3* t)
     }
 
     temp = sqrt(temp);
-    Vector3 exp2 = math.MultiplyScalar(norm, temp);
-    *t = math.Minus(exp1, exp2);
+    Vector3 exp2 = math.MultiplyScalar(*normal, temp);
+    Vector3 refractDir = math.Minus(exp1, exp2);
+    refractDir = math.Normalize(refractDir);
 
+    //Find the refraction colour
+    float minRefractT = 99999;
+    Vector3 minRefractNormal;
+    Vector3 minRefractIntPoint;
+    int minRefractObjectIndex = *refractObjectIndex;
+    bool refraction;
+    bool didRefract = false;
 
-    return true;
+    if (!inside) {
+        float refractT;
+        Vector3 refractNormal;
+        Vector3 refractIntPoint;
+        refraction = pObjectList[*refractObjectIndex]->Intersect(*intPoint, refractDir, &refractT, &refractNormal, &refractIntPoint, true);
+        didRefract = true;
+        minRefractT = refractT;
+        minRefractNormal = refractNormal;
+        minRefractIntPoint = refractIntPoint;
+    } else {
+
+        for(int k = 0; k < pObjectList.size(); k++) {
+            float refractT;
+            Vector3 refractNormal;
+            Vector3 refractIntPoint;
+
+            if (k == *refractObjectIndex) {
+                continue;
+            }
+
+            //Shoot a ray in the object direction
+            refraction = pObjectList[k]->Intersect(*intPoint, refractDir, &refractT, &refractNormal, &refractIntPoint);
+
+            //If it intersects, determine the colour
+            if(refraction)
+            {
+                if(minRefractT > refractT)
+                {
+                    didRefract = true;
+                    minRefractT = refractT;
+                    minRefractNormal = refractNormal;
+                    minRefractIntPoint = refractIntPoint;
+                    minRefractObjectIndex = k;
+                    *refractAmbient = pObjectList[k]->ambientColour;
+                    *refractDiffuse = pObjectList[k]->diffuseColour;
+                }
+            }
+        }
+    }
+
+    if(didRefract)
+    {
+        *c = -d_dot_n;
+        *intPoint = minRefractIntPoint;
+        *normal = minRefractNormal;
+        *refractObjectIndex = minRefractObjectIndex;
+
+        if (!inside)
+        {
+//            if (math.DotProduct(refractDir, *normal) < 0) {
+                *normal = math.MultiplyScalar(*normal, -1);
+//            }
+            return Refraction(refractDir, normal, intPoint, refractObjectIndex, refractAmbient, refractDiffuse, true, c);
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 void FindIntersection() {
@@ -243,7 +320,7 @@ void RayTrace::RayTraceSurface(Image* pImage)
     Sphere sphereTwo(Vector3(100, 256, 450), 75, Vector3(40, 20, 20), Vector3(250, 128, 128), true);
 
     //Create a refractive surface
-    Sphere sphereThree(Vector3(75, 400, 250), 50, Vector3(40, 20, 20), Vector3(250, 128, 128), false, true);
+    Sphere sphereThree(Vector3(350, 100, 250), 50, Vector3(20, 20, 40), Vector3(128, 128, 250), false, true);
 
     //Add objects to the object list
     pObjectList.push_back(&cubeRoom);
@@ -266,14 +343,15 @@ void RayTrace::RayTraceSurface(Image* pImage)
             //Split each pixel into 4 quarters, then average the colours
             std::vector<Vector3> colours;
 
-            float m = 0;
-            while(m < 1)
+            for(float k = 0.0f; k < 1.0f; k += 1.0f/(float)numGridRows)
             {
-                float n = 0;
-                while(n < 1)
+                for(float l = 0.0f; l < 1.0f; l += 1.0f/(float)numGridColumns)
                 {
                     //Set up the ray
-                    Vector3 pixelPosition((float)j + n, (float)i + m, 0);
+                    float x_offset = l + rand()/((float)RAND_MAX * (float)numGridColumns);
+                    float y_offset = k + rand()/((float)RAND_MAX * (float)numGridRows);
+
+                    Vector3 pixelPosition((float)j + x_offset, (float)i + y_offset, 0);
                     Vector3 direction = math.Minus(pixelPosition, camera);
                     direction = math.Normalize(direction);
 
@@ -287,14 +365,14 @@ void RayTrace::RayTraceSurface(Image* pImage)
                     Vector3 diffuseColour;
 
                     //Determine intersection with the list of objects
-                    for(int k = 0; k < pObjectList.size(); k++)
+                    for(int m = 0; m < pObjectList.size(); m++)
                     {
                         float t;
                         Vector3 normal;
                         Vector3 intPoint;
 
                         //Shoot a ray in the object direction
-                        bool doesIntersect = pObjectList[k]->Intersect(camera, direction, &t, &normal, &intPoint);
+                        bool doesIntersect = pObjectList[m]->Intersect(camera, direction, &t, &normal, &intPoint);
 
                         //If it intersects, determine the colour
                         if(doesIntersect)
@@ -305,9 +383,9 @@ void RayTrace::RayTraceSurface(Image* pImage)
                                 tMin = t;
                                 normalMin = normal;
                                 intPointMin = intPoint;
-                                minObjectIndex = k;
-                                ambientColour = pObjectList[k]->ambientColour;
-                                diffuseColour = pObjectList[k]->diffuseColour;
+                                minObjectIndex = m;
+                                ambientColour = pObjectList[m]->ambientColour;
+                                diffuseColour = pObjectList[m]->diffuseColour;
                             }
                         }
                     }
@@ -317,6 +395,8 @@ void RayTrace::RayTraceSurface(Image* pImage)
                     {
                         if(pObjectList[minObjectIndex]->refraction)
                         {
+                            float materialIndex = 1.55f;
+
                             Vector3 refNormal = normalMin;
                             Vector3 refIntPoint = intPointMin;
                             int minRefObjectIndex = minObjectIndex;
@@ -324,117 +404,62 @@ void RayTrace::RayTraceSurface(Image* pImage)
                             Vector3 refDiffuse;
                             bool reflection = Reflection(direction, &refNormal, &refIntPoint, &minRefObjectIndex, &refAmbient, &refDiffuse);
 
-                            Vector3 refractedDir;
-                            float c;
-                            Vector3 k;
-                            float materialIndex = 1.55f;
-
-                            if(math.DotProduct(direction, normalMin) < 0)
-                            {
-                                Refraction(direction, normalMin, materialIndex, &refractedDir);
-                                Vector3 temp = math.MultiplyScalar(direction, -1.0f);
-                                c = math.DotProduct(temp, normalMin);
-                                k.x = k.y = k.z = 1;
-                            }
-                            else
-                            {
-                                //Don't know where these values come in
-                                //k.x = exp(-a.x * t)
-                                //k.y = exp(-a.y * t)
-                                //k.z = exp(-a.z * t)
-                                k.x = k.y = k.z = 0.2;
-                                Vector3 negNormal = math.MultiplyScalar(normalMin, -1.0f);
-                                bool refract = Refraction(direction, negNormal, 1.0f/materialIndex, &refractedDir);
-                                if(refract)
-                                {
-                                    c = math.DotProduct(refractedDir, normalMin);
-                                }
-                                else
-                                {
-                                    //color = k * color(p + tr)
-                                    refAmbient.x *= k.x;
-                                    refAmbient.y *= k.y;
-                                    refAmbient.z *= k.z;
-
-                                    refDiffuse.x *= k.x;
-                                    refDiffuse.y *= k.y;
-                                    refDiffuse.z *= k.z;
-                                }
-                            }
-                            float R_0 = ((materialIndex - 1) * (materialIndex - 1))/((materialIndex + 1) * (materialIndex + 1));
-                            float R = R_0 + (1 - R_0) * pow((1 - c), 5.0f);
-
-                            //Find the refraction colour
-                            float minRefractT = 99999;
-                            Vector3 minRefractNormal;
-                            Vector3 minRefractIntPoint;
-                            int minRefractObjectIndex;
+                            Vector3 refractNormal = normalMin;
+                            Vector3 refractIntPoint = intPointMin;
+                            int refractObjectIndex = minObjectIndex;
                             Vector3 refractAmbient;
                             Vector3 refractDiffuse;
-                            bool refraction;
+                            float c;
+                            bool refraction = Refraction(direction, &refractNormal, &refractIntPoint, &refractObjectIndex, &refractAmbient, &refractDiffuse, false, &c);
 
-                            for(int k = 0; k < pObjectList.size(); k++) {
-                                float refractT;
-                                Vector3 refractNormal;
-                                Vector3 refractIntPoint;
+                            float R_0 = ((materialIndex - 1) * (materialIndex - 1))/((materialIndex + 1) * (materialIndex + 1));
+                            float R = R_0 + (1 - R_0) * pow((1 - fabs(c)), 5.0f);
 
-                                //Shoot a ray in the object direction
-                                refraction = pObjectList[k]->Intersect(camera, direction, &refractT, &refractNormal, &refractIntPoint);
+                            Vector3 refractionColour, reflectionColour;
 
-                                //If it intersects, determine the colour
-                                if(refraction)
-                                {
-                                    if(minRefractT > refractT)
-                                    {
-                                        minRefractT = refractT;
-                                        minRefractNormal = refractNormal;
-                                        minRefractIntPoint = refractIntPoint;
-                                        minRefractObjectIndex = k;
-                                        refractAmbient = pObjectList[k]->ambientColour;
-                                        refractDiffuse = pObjectList[k]->diffuseColour;
-                                    }
-                                }
-                            }
                             //color = k * (R * color(p + tr) + (1 - R)color(p + tt))
 
                             //Determine if either the relection point or the refraction point is in shadow
+                            lightsForShading.clear();
                             bool shadowOnReflect = false;
                             if(reflection)
                             {
                                 shadowOnReflect = CheckShadow(refIntPoint, minRefObjectIndex);
+                                if(!shadowOnReflect)
+                                {
+                                    reflectionColour = DiffuseShade(refIntPoint, refNormal, refAmbient, refDiffuse, lightsForShading);
+                                }
+                                else
+                                {
+                                    reflectionColour = shadowColour;
+                                }
                             }
 
+                            lightsForShading.clear();
                             bool shadowOnRefract = false;
                             if(refraction)
                             {
-                                refraction = CheckShadow(minRefractIntPoint, minRefractObjectIndex);
+                                shadowOnRefract = CheckShadow(refractIntPoint, refractObjectIndex);
+                                if(!shadowOnRefract)
+                                {
+                                    refractionColour = DiffuseShade(refractIntPoint, refractNormal, refractAmbient, refractDiffuse, lightsForShading);
+                                }
+                                else
+                                {
+                                    refractionColour = shadowColour;
+                                }
+                            } else {
+                                refractionColour = reflectionColour;
                             }
 
-                            refAmbient = math.MultiplyScalar(refAmbient, R);
-                            refractAmbient = math.MultiplyScalar(refractAmbient, (1.0f - R));
+                            colours.push_back(math.Add(math.MultiplyScalar(reflectionColour, R), math.MultiplyScalar(refractionColour, 1 - R)));
+//                            colours.push_back(reflectionColour);
+                            if (refractionColour.x <= 100 && refractionColour.y <= 70 && refractionColour.z <= 100 && !shadowOnReflect)
+                            {
+                                int x = 0;
+                            }
+//                            colours.push_back(refractionColour);
 
-                            refDiffuse = math.MultiplyScalar(refDiffuse, R);
-                            refractDiffuse = math.MultiplyScalar(refractDiffuse, (1.0f - R));
-
-                            if(shadowOnReflect && shadowOnRefract)
-                            {
-                                ambientColour = math.Add(refAmbient, refractAmbient);
-                                diffuseColour = math.Add(refDiffuse, refractDiffuse);
-                            }
-                            else if(shadowOnReflect)
-                            {
-                                ambientColour = refAmbient;
-                                diffuseColour = refDiffuse;
-                            }
-                            else if(shadowOnRefract)
-                            {
-                                ambientColour = refractAmbient;
-                                diffuseColour = refractDiffuse;
-                            }
-                            else
-                            {
-                                shadow = true;
-                            }
                         }
                         else
                         {
@@ -447,24 +472,23 @@ void RayTrace::RayTraceSurface(Image* pImage)
                             //Determine if a pixel is in shadow from any light
                             lightsForShading.clear();
                             shadow = CheckShadow(intPointMin, minObjectIndex);
+
+                            //When a pixel is not in shadow, determine the colour
+                            if(!shadow)
+                            {
+                                colours.push_back(DiffuseShade(intPointMin, normalMin, ambientColour, diffuseColour, lightsForShading));
+                            }
+                            else
+                            {
+                                colours.push_back(shadowColour);
+                            }
                         }
 
-                        //When a pixel is not in shadow, determine the colour
-                        if(!shadow)
-                        {
-                            colours.push_back(DiffuseShade(intPointMin, normalMin, ambientColour, diffuseColour, lightsForShading));
-                        }
-                        else
-                        {
-                            colours.push_back(shadowColour);
-                        }
                     }
-                    n += 0.5;
                 }
-                m += 0.5;
             }
 
-            //Average the four resulting colours for a pixel
+            //Average the resulting colours for a pixel
             Vector3 result = math.VectorAverage(colours);
 
             //Set the colour of the pixel

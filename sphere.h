@@ -31,7 +31,7 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     virtual bool Intersect(Vector3 origin, Vector3 direction,
-                           float* tOut, Vector3* normalOut, Vector3* intPoint);
+                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false);
 
     /**
      * Translates the sphere over the specified distance.

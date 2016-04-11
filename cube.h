@@ -32,7 +32,7 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     bool Intersect(Vector3 origin, Vector3 direction,
-                   float* tOut, Vector3* normalOut, Vector3* intPointOut);
+                   float* tOut, Vector3* normalOut, Vector3* intPointOut, bool backPoint = false);
 
     /** The triangles that make up the cube. */
     std::vector<Triangle> triangles;

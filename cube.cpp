@@ -21,7 +21,7 @@ Cube::Cube(CubeConstruct cube, Vector3 ambient, Vector3 diffuse, bool reflection
 }
 
 bool Cube::Intersect(Vector3 origin, Vector3 direction,
-               float* tOut, Vector3* normalOut, Vector3* intPointOut)
+               float* tOut, Vector3* normalOut, Vector3* intPointOut, bool backPoint)
 {
     float tMin = 999999;
     Vector3 normalMin;

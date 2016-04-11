@@ -42,7 +42,7 @@ public:
 
     bool Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *minObjectIndex, Vector3 *ambientColour, Vector3 *diffuseColour);
 
-    bool Refraction(Vector3 dir, Vector3 norm, float rindex, Vector3* t);
+    bool Refraction(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *refractObjectIndex, Vector3 *refractAmbient, Vector3 *refractDiffuse, bool inside, float *c);
 
     void FindIntersection();
 
@@ -59,7 +59,8 @@ public:
     std::vector<Object*> pObjectList;
     LightSource areaLight;
     Common math;
-
-    float airIndex = 1.0f;
+    int numGridRows;
+    int numGridColumns;
+    float airIndex;
 };
 

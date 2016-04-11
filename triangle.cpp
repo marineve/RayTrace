@@ -16,7 +16,7 @@ Triangle::Triangle(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 ambient, Vector3 
 }
 
 bool Triangle::Intersect(Vector3 origin, Vector3 direction,
-                           float* tOut, Vector3* normalOut, Vector3* intPoint)
+                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint)
 {
     //Define the rest of the constants
     g = direction.x;
