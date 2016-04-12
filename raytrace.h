@@ -41,11 +41,13 @@ public:
 
     bool CheckShadow(Vector3 intPoint, int objectIndex);
 
-    bool Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *minObjectIndex, Vector3 *ambientColour, Vector3 *diffuseColour);
+	Vector3 Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *minObjectIndex, Vector3 *ambientColour, Vector3 *diffuseColour);
 
-    bool Refraction(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *refractObjectIndex, Vector3 *refractAmbient, Vector3 *refractDiffuse, bool inside, float *c);
+	Vector3 Refraction(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *refractObjectIndex, Vector3 *refractAmbient, Vector3 *refractDiffuse, bool inside);
 
-	bool FindIntersection(Vector3 direction, Vector3 *colour);
+	Vector3 FindIntersection(Vector3 direction);
+
+	Vector3 GetPointColour(Vector3 intPoint, int objectIndex, Vector3 normal, Vector3 ambientColour, Vector3 diffuseColour);
 
     /**
      * Ray traces objects and renders an image.
