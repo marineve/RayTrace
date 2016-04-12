@@ -17,7 +17,7 @@ public:
      * @param diffuse - the diffuse colour of the triangle
      * @param reflection - whether the triangle is reflective
      */
-    Triangle(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 ambient, Vector3 diffuse, bool reflection = false, bool refraction = false);
+    Triangle(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 ambient, Vector3 diffuse, bool reflection = false, bool refraction = false, bool normalDirOut = false);
 
     /**
      * Intersect method inherited from the Object class.
@@ -30,11 +30,13 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     virtual bool Intersect(Vector3 origin, Vector3 direction,
-                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false);
+                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false,
+						   Vector3 *aColour = nullptr, Vector3 *dColour = nullptr);
 
     Vector3 point1;
     Vector3 point2;
     Vector3 point3;
     Common math;
+	bool normDirOut;
     float a, b, c, d, e, f, g, h, i, j, k, l;
 };

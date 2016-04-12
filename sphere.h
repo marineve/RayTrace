@@ -31,7 +31,8 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     virtual bool Intersect(Vector3 origin, Vector3 direction,
-                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false);
+                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false,
+						   Vector3 *aColour = nullptr, Vector3 *dColour = nullptr);
 
     /**
      * Translates the sphere over the specified distance.
@@ -45,6 +46,8 @@ public:
      * @return a vector containing the new coordinates
      */
     Vector3 Transform();
+
+	std::vector < Vector3 > GetBoundaryPoints() override;
 
     /** The center of the sphere. */
     Vector3 center;

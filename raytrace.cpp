@@ -7,8 +7,8 @@ RayTrace::RayTrace():
     camera(256, 256, -400),
     shadowColour(0, 0, 0),
     areaLight(Vector3(300, -200, -50), Vector3(100, -200, -50), Vector3(300, -200, 50), 2),
-    numGridRows(5),
-    numGridColumns(5),
+    numGridRows(1),
+    numGridColumns(1),
     airIndex(1.0f) {}
 
 void RayTrace::SetColour(Pixel &px, Vector3 calcColour)
@@ -54,7 +54,8 @@ Vector3 RayTrace::DiffuseShade(Vector3 surface, Vector3 normal, Vector3 aColour,
         }
     }
 
-    return math.MultiplyScalar(totalColour, 1.0/(areaLight.n*areaLight.n));
+    totalColour = math.MultiplyScalar(totalColour, 1.0/(areaLight.n*areaLight.n));
+	return Vector3(min(totalColour.x, (float)255), min(totalColour.y, (float)255), min(totalColour.z, (float)255));
 }
 
 bool RayTrace::CheckShadow(Vector3 intPoint, int objectIndex)
@@ -124,6 +125,7 @@ bool RayTrace::Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint,
     float N_dot_V = math.DotProduct(direction, *normal);
     Vector3 reflectionDirection = math.MultiplyScalar(math.MultiplyScalar(*normal, N_dot_V), 2);
     reflectionDirection = math.Minus(direction, reflectionDirection);
+	reflectionDirection = math.Normalize(reflectionDirection);
 
     //Determine intersection with the list of objects
     for(int i = 0; i < pObjectList.size(); i++)
@@ -136,18 +138,15 @@ bool RayTrace::Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint,
         bool reflection = pObjectList[i]->Intersect(*intPoint, reflectionDirection, &t, &newNormal, &newIntPoint);
 
         //If it hits something, shoot a ray off to the light source to determine colour
-        if(reflection)
-        {
-            didReflect = true;
-            if(tMin > t)
-            {
-                tMin = t;
-                normalMin = newNormal;
-                if (i == 1) {
-                    normalMin = math.MultiplyScalar(normalMin, -1);
-                }
-                intPointMin = newIntPoint;
-                *minObjectIndex = i;
+		if (reflection)
+		{
+			didReflect = true;
+			if (tMin > t)
+			{
+				tMin = t;
+				normalMin = newNormal;
+				intPointMin = newIntPoint;
+				*minObjectIndex = i;
                 *ambientColour = pObjectList[i]->ambientColour;
                 *diffuseColour = pObjectList[i]->diffuseColour;
             }
@@ -161,6 +160,12 @@ bool RayTrace::Reflection(Vector3 direction, Vector3 *normal, Vector3 *intPoint,
     if (didReflect) {
         *intPoint = intPointMin;
         *normal = normalMin;
+
+		if (pObjectList[*minObjectIndex]->reflection || pObjectList[*minObjectIndex]->refraction)
+		{
+			Vector3 colour;
+			return FindIntersection(reflectionDirection, &colour);
+		}
         return true;
     }
     else
@@ -268,8 +273,138 @@ bool RayTrace::Refraction(Vector3 direction, Vector3 *normal, Vector3 *intPoint,
     }
 }
 
-void FindIntersection() {
+bool RayTrace::FindIntersection(Vector3 direction, Vector3 *colour) {
+	float tMin = 999999;
+	Vector3 normalMin;
+	Vector3 intPointMin;
+	int minObjectIndex;
+	bool hasIntersection = false;
 
+	Vector3 ambientColour;
+	Vector3 diffuseColour;
+
+	//Determine intersection with the list of objects
+	for (int m = 0; m < pObjectList.size(); m++)
+	{
+		float t;
+		Vector3 normal;
+		Vector3 intPoint;
+
+		//Shoot a ray in the object direction
+		bool doesIntersect = pObjectList[m]->Intersect(camera, direction, &t, &normal, &intPoint);
+
+		//If it intersects, determine the colour
+		if (doesIntersect)
+		{
+			hasIntersection = true;
+			if (tMin > t)
+			{
+				tMin = t;
+				normalMin = normal;
+				intPointMin = intPoint;
+				minObjectIndex = m;
+				ambientColour = pObjectList[m]->ambientColour;
+				diffuseColour = pObjectList[m]->diffuseColour;
+			}
+		}
+	}
+	//hasIntersection = uniformGrid.Intersect(camera, direction, &tMin, &normalMin, &intPointMin);
+
+	bool shadow = false;
+	if (hasIntersection)
+	{
+		if (pObjectList[minObjectIndex]->refraction)
+		{
+			float materialIndex = 1.55f;
+
+			Vector3 refNormal = normalMin;
+			Vector3 refIntPoint = intPointMin;
+			int minRefObjectIndex = minObjectIndex;
+			Vector3 refAmbient;
+			Vector3 refDiffuse;
+			bool reflection = Reflection(direction, &refNormal, &refIntPoint, &minRefObjectIndex, &refAmbient, &refDiffuse);
+
+			Vector3 refractNormal = normalMin;
+			Vector3 refractIntPoint = intPointMin;
+			int refractObjectIndex = minObjectIndex;
+			Vector3 refractAmbient;
+			Vector3 refractDiffuse;
+			float c;
+			bool refraction = Refraction(direction, &refractNormal, &refractIntPoint, &refractObjectIndex, &refractAmbient, &refractDiffuse, false, &c);
+
+			float R_0 = ((materialIndex - 1) * (materialIndex - 1)) / ((materialIndex + 1) * (materialIndex + 1));
+			float R = R_0 + (1 - R_0) * pow((1 - fabs(c)), 5.0f);
+
+			Vector3 refractionColour, reflectionColour;
+
+			//color = k * (R * color(p + tr) + (1 - R)color(p + tt))
+
+			//Determine if either the relection point or the refraction point is in shadow
+			lightsForShading.clear();
+			bool shadowOnReflect = false;
+			if (reflection)
+			{
+				shadowOnReflect = CheckShadow(refIntPoint, minRefObjectIndex);
+				if (!shadowOnReflect)
+				{
+					reflectionColour = DiffuseShade(refIntPoint, refNormal, refAmbient, refDiffuse, lightsForShading);
+				}
+				else
+				{
+					reflectionColour = shadowColour;
+				}
+			}
+
+			lightsForShading.clear();
+			bool shadowOnRefract = false;
+			if (refraction)
+			{
+				shadowOnRefract = CheckShadow(refractIntPoint, refractObjectIndex);
+				if (!shadowOnRefract)
+				{
+					refractionColour = DiffuseShade(refractIntPoint, refractNormal, refractAmbient, refractDiffuse, lightsForShading);
+				}
+				else
+				{
+					refractionColour = shadowColour;
+				}
+			}
+			else {
+				refractionColour = reflectionColour;
+			}
+
+			*colour = math.Add(math.MultiplyScalar(reflectionColour, R), math.MultiplyScalar(refractionColour, 1 - R));
+			return true;
+			//                            colours.push_back(reflectionColour);
+			//                            colours.push_back(refractionColour);
+
+		}
+		else
+		{
+			//Determine if an object is reflective
+			if (pObjectList[minObjectIndex]->reflection)
+			{
+				Reflection(direction, &normalMin, &intPointMin, &minObjectIndex, &ambientColour, &diffuseColour);
+			}
+
+			//Determine if a pixel is in shadow from any light
+			lightsForShading.clear();
+			shadow = CheckShadow(intPointMin, minObjectIndex);
+
+			//When a pixel is not in shadow, determine the colour
+			if (!shadow)
+			{
+				*colour = DiffuseShade(intPointMin, normalMin, ambientColour, diffuseColour, lightsForShading);
+				return true;
+			}
+			else
+			{
+				*colour = shadowColour;
+				return false;
+			}
+		}
+
+	}
 }
 
 void RayTrace::RayTraceSurface(Image* pImage)
@@ -312,7 +447,7 @@ void RayTrace::RayTraceSurface(Image* pImage)
     cubeVertices.push_back(Vector3(425, 475, 100));
     cubeVertices.push_back(Vector3(475, 475, 100));
 
-    Cube cube(CubeConstruct(cubeVertices), Vector3(0, 0, 150), Vector3(0, 0, 200));
+    Cube cube(CubeConstruct(cubeVertices), Vector3(0, 0, 150), Vector3(0, 0, 255), false, false, true);
 
     Sphere sphereOne(Vector3(255, 255, 300), 120, Vector3(40, 20, 20), Vector3(250, 128, 128));
 
@@ -332,15 +467,27 @@ void RayTrace::RayTraceSurface(Image* pImage)
     //Apply transformations: translations to the first sphere
     sphereOne.Translate(Vector3(150, 150, 150));
 
-    srand (time(NULL));
+	//Create the grid for uniform spacial subdivision
+	maxObjectSize = 300;
+	int numXVoxels = (int)ceil((float)512 / maxObjectSize);
+	int numYVoxels = (int)ceil((float)512 / maxObjectSize);
+	int numZVoxels = (int)ceil((float)1500/ maxObjectSize);
+	Grid uniformGrid(512, 512, -400, 1100, numXVoxels, numYVoxels, numZVoxels);
+
+	uniformGrid.AddObject(&cubeRoom);
+	uniformGrid.AddObject(&cube);
+	uniformGrid.AddObject(&sphereOne);
+	uniformGrid.AddObject(&sphereTwo);
+	uniformGrid.AddObject(&sphereThree);
+
+	srand(time(NULL));
 
     //Iterate through the pixels
     for(int i = 0; i < 512; i++)
     {
         for(int j = 0; j < 512; j++)
         {
-            //Apply super-sampling antialiasing
-            //Split each pixel into 4 quarters, then average the colours
+            //Apply jittered antialiasing
             std::vector<Vector3> colours;
 
             for(float k = 0.0f; k < 1.0f; k += 1.0f/(float)numGridRows)
@@ -355,136 +502,9 @@ void RayTrace::RayTraceSurface(Image* pImage)
                     Vector3 direction = math.Minus(pixelPosition, camera);
                     direction = math.Normalize(direction);
 
-                    float tMin = 999999;
-                    Vector3 normalMin;
-                    Vector3 intPointMin;
-                    int minObjectIndex;
-                    bool hasIntersection = false;
-
-                    Vector3 ambientColour;
-                    Vector3 diffuseColour;
-
-                    //Determine intersection with the list of objects
-                    for(int m = 0; m < pObjectList.size(); m++)
-                    {
-                        float t;
-                        Vector3 normal;
-                        Vector3 intPoint;
-
-                        //Shoot a ray in the object direction
-                        bool doesIntersect = pObjectList[m]->Intersect(camera, direction, &t, &normal, &intPoint);
-
-                        //If it intersects, determine the colour
-                        if(doesIntersect)
-                        {
-                            hasIntersection = true;
-                            if(tMin > t)
-                            {
-                                tMin = t;
-                                normalMin = normal;
-                                intPointMin = intPoint;
-                                minObjectIndex = m;
-                                ambientColour = pObjectList[m]->ambientColour;
-                                diffuseColour = pObjectList[m]->diffuseColour;
-                            }
-                        }
-                    }
-
-                    bool shadow = false;
-                    if(hasIntersection)
-                    {
-                        if(pObjectList[minObjectIndex]->refraction)
-                        {
-                            float materialIndex = 1.55f;
-
-                            Vector3 refNormal = normalMin;
-                            Vector3 refIntPoint = intPointMin;
-                            int minRefObjectIndex = minObjectIndex;
-                            Vector3 refAmbient;
-                            Vector3 refDiffuse;
-                            bool reflection = Reflection(direction, &refNormal, &refIntPoint, &minRefObjectIndex, &refAmbient, &refDiffuse);
-
-                            Vector3 refractNormal = normalMin;
-                            Vector3 refractIntPoint = intPointMin;
-                            int refractObjectIndex = minObjectIndex;
-                            Vector3 refractAmbient;
-                            Vector3 refractDiffuse;
-                            float c;
-                            bool refraction = Refraction(direction, &refractNormal, &refractIntPoint, &refractObjectIndex, &refractAmbient, &refractDiffuse, false, &c);
-
-                            float R_0 = ((materialIndex - 1) * (materialIndex - 1))/((materialIndex + 1) * (materialIndex + 1));
-                            float R = R_0 + (1 - R_0) * pow((1 - fabs(c)), 5.0f);
-
-                            Vector3 refractionColour, reflectionColour;
-
-                            //color = k * (R * color(p + tr) + (1 - R)color(p + tt))
-
-                            //Determine if either the relection point or the refraction point is in shadow
-                            lightsForShading.clear();
-                            bool shadowOnReflect = false;
-                            if(reflection)
-                            {
-                                shadowOnReflect = CheckShadow(refIntPoint, minRefObjectIndex);
-                                if(!shadowOnReflect)
-                                {
-                                    reflectionColour = DiffuseShade(refIntPoint, refNormal, refAmbient, refDiffuse, lightsForShading);
-                                }
-                                else
-                                {
-                                    reflectionColour = shadowColour;
-                                }
-                            }
-
-                            lightsForShading.clear();
-                            bool shadowOnRefract = false;
-                            if(refraction)
-                            {
-                                shadowOnRefract = CheckShadow(refractIntPoint, refractObjectIndex);
-                                if(!shadowOnRefract)
-                                {
-                                    refractionColour = DiffuseShade(refractIntPoint, refractNormal, refractAmbient, refractDiffuse, lightsForShading);
-                                }
-                                else
-                                {
-                                    refractionColour = shadowColour;
-                                }
-                            } else {
-                                refractionColour = reflectionColour;
-                            }
-
-                            colours.push_back(math.Add(math.MultiplyScalar(reflectionColour, R), math.MultiplyScalar(refractionColour, 1 - R)));
-//                            colours.push_back(reflectionColour);
-                            if (refractionColour.x <= 100 && refractionColour.y <= 70 && refractionColour.z <= 100 && !shadowOnReflect)
-                            {
-                                int x = 0;
-                            }
-//                            colours.push_back(refractionColour);
-
-                        }
-                        else
-                        {
-                            //Determine if an object is reflective
-                            if(pObjectList[minObjectIndex]->reflection)
-                            {
-                                hasIntersection = Reflection(direction, &normalMin, &intPointMin, &minObjectIndex, &ambientColour, &diffuseColour);
-                            }
-
-                            //Determine if a pixel is in shadow from any light
-                            lightsForShading.clear();
-                            shadow = CheckShadow(intPointMin, minObjectIndex);
-
-                            //When a pixel is not in shadow, determine the colour
-                            if(!shadow)
-                            {
-                                colours.push_back(DiffuseShade(intPointMin, normalMin, ambientColour, diffuseColour, lightsForShading));
-                            }
-                            else
-                            {
-                                colours.push_back(shadowColour);
-                            }
-                        }
-
-                    }
+					Vector3 colour;
+					FindIntersection(direction, &colour);
+					colours.push_back(colour);
                 }
             }
 

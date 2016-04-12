@@ -7,7 +7,8 @@ Sphere::Sphere(Vector3 centerIn, float radiusIn, Vector3 ambient, Vector3 diffus
 {}
 
 bool Sphere::Intersect(Vector3 origin, Vector3 direction,
-                  float *tOut, Vector3 *normalOut, Vector3* intPoint, bool backPoint)
+                  float *tOut, Vector3 *normalOut, Vector3* intPoint, bool backPoint,
+				  Vector3 *aColour, Vector3 *dColour)
 {
     Vector3 EO = math.Minus(center, origin);
     float v = math.DotProduct(EO, direction);
@@ -80,4 +81,27 @@ Vector3 Sphere::Transform()
     int w = v[0] * m[0][3] + v[1] * m[1][3] + v[2] * m[2][3] + v[3] * m[3][3];
 
     return result;
+}
+
+std::vector < Vector3 > Sphere::GetBoundaryPoints() {
+	Vector3 LLF(center.x - radius, center.y - radius, center.z - radius);
+	Vector3 LRF(center.x + radius, center.y - radius, center.z - radius);
+	Vector3 ULF(center.x - radius, center.y + radius, center.z - radius);
+	Vector3 URF(center.x + radius, center.y + radius, center.z - radius);
+	Vector3 LLB(center.x - radius, center.y - radius, center.z + radius);
+	Vector3 LRB(center.x + radius, center.y - radius, center.z + radius);
+	Vector3 ULB(center.x - radius, center.y + radius, center.z + radius);
+	Vector3 URB(center.x + radius, center.y + radius, center.z + radius);
+
+	std::vector < Vector3 > result;
+	result.push_back(LLF);
+	result.push_back(LRF);
+	result.push_back(ULF);
+	result.push_back(URF);
+	result.push_back(LLB);
+	result.push_back(LRB);
+	result.push_back(ULB);
+	result.push_back(URB);
+
+	return result;
 }

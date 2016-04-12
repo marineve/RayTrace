@@ -19,7 +19,7 @@ public:
      * @param diffuse - the diffuse colour of the cube
      * @param reflection - whether the cube is reflective
      */
-    Cube(CubeConstruct cube, Vector3 ambient, Vector3 diffuse, bool reflection = false, bool refraction = false);
+    Cube(CubeConstruct cube, Vector3 ambient, Vector3 diffuse, bool reflection = false, bool refraction = false, bool normalDirOut = false);
 
     /**
      * Intersect method inherited from the Object class.
@@ -32,8 +32,12 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     bool Intersect(Vector3 origin, Vector3 direction,
-                   float* tOut, Vector3* normalOut, Vector3* intPointOut, bool backPoint = false);
+                   float* tOut, Vector3* normalOut, Vector3* intPointOut, bool backPoint = false,
+				   Vector3 *aColour = nullptr, Vector3 *dColour = nullptr);
+
+	std::vector < Vector3 > GetBoundaryPoints() override;
 
     /** The triangles that make up the cube. */
-    std::vector<Triangle> triangles;
+    std::vector < Triangle > triangles;
+	std::vector < Vector3 > boundaryPoints;
 };

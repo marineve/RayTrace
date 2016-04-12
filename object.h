@@ -23,6 +23,8 @@ public:
         refraction = refract;
     }
 
+	Object() {}
+
     /**
      * Determines whether a ray from the origin intersects with the object.
      *
@@ -34,7 +36,10 @@ public:
      * @return boolean value indication whether the ray successfully intersected
      */
     virtual bool Intersect(Vector3 origin, Vector3 direction,
-                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false) = 0;
+                           float* tOut, Vector3* normalOut, Vector3* intPoint, bool backPoint = false, 
+						   Vector3 *aColour = nullptr, Vector3 *dColour = nullptr) = 0;
+
+	virtual std::vector < Vector3 > GetBoundaryPoints() { return std::vector < Vector3 >(); }
 
     Vector3 ambientColour;
     Vector3 diffuseColour;

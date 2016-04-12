@@ -8,6 +8,7 @@
 #include "triangle.h"
 #include "cube.h"
 #include "lightsource.h"
+#include "grid.h"
 
 /**
  * RayTrace class definition.
@@ -44,7 +45,7 @@ public:
 
     bool Refraction(Vector3 direction, Vector3 *normal, Vector3 *intPoint, int *refractObjectIndex, Vector3 *refractAmbient, Vector3 *refractDiffuse, bool inside, float *c);
 
-    void FindIntersection();
+	bool FindIntersection(Vector3 direction, Vector3 *colour);
 
     /**
      * Ray traces objects and renders an image.
@@ -62,5 +63,7 @@ public:
     int numGridRows;
     int numGridColumns;
     float airIndex;
+	/** This does not include the cube room, since it takes up the entire visual space. */
+	int maxObjectSize;
 };
 
